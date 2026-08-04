@@ -875,6 +875,7 @@
       </select>
     </label>
   </div>
+  <button class="btn btn-toggle" id="resetFormationBtn" type="button">🔄 التشكيلة الافتراضية</button>
   <button class="btn btn-print" id="printBtn" type="button">🖨️ طباعة</button>
 </div>
 <div class="hint">💡 في وضع الحذف اضغطي على اللاعب لحذفه، ثم اضغطي الزر مرة ثانية للرجوع للتحريك</div>
@@ -932,6 +933,7 @@
   const addGkBtn = document.getElementById('addGkBtn');
   const deleteBtn = document.getElementById('deleteBtn');
   const printBtn = document.getElementById('printBtn');
+  const resetFormationBtn = document.getElementById('resetFormationBtn');
   const arabicSiteBtn = document.getElementById('arabicSiteBtn');
   const englishSiteBtn = document.getElementById('englishSiteBtn');
   const sidebarList = document.getElementById('sidebarList');
@@ -1016,6 +1018,8 @@
       deleteOff: '🗑️ وضع الحذف',
       deleteOn: '✅ إيقاف الحذف',
       print: '🖨️ طباعة',
+      resetFormation: '🔄 التشكيلة الافتراضية',
+      resetConfirm: 'هل تريدين حذف التعديلات المحفوظة والرجوع للتشكيلة الافتراضية؟',
       hint: '💡 احذفي اللاعب من الملعب فقط، ثم أعيديه من القائمة الجانبية متى ما احتجتِ.',
       promptEdit: 'تعديل اسم اللاعب:',
       sidebarTitle: 'قائمة اللاعبين',
@@ -1048,6 +1052,8 @@
       deleteOff: '🗑️ Delete mode',
       deleteOn: '✅ Stop delete',
       print: '🖨️ Print',
+      resetFormation: '🔄 Default formation',
+      resetConfirm: 'Delete the saved changes and restore the default formation?',
       hint: '💡 Remove a player from the pitch, then add them again anytime from the side list.',
       promptEdit: 'Edit player name:',
       sidebarTitle: 'Players list',
@@ -1177,6 +1183,97 @@
     y: player.y
   }));
 
+
+  // ===== الحفظ التلقائي على نفس الجهاز والمتصفح =====
+  const STORAGE_KEY = 'ittihad-formation-v1';
+  let isRestoringState = false;
+  let saveTimer = null;
+
+  function getCurrentState(){
+    return {
+      version: 1,
+      language: currentLanguage,
+      roster: squadRoster.map(player => ({...player})),
+      pitchPlayers: [...pitch.querySelectorAll('.chip')].map(chip => ({
+        rosterId: chip.dataset.rosterId || '',
+        x: parseFloat(chip.style.left) || 50,
+        y: parseFloat(chip.style.top) || 50
+      })),
+      printOptions: {
+        showNames: printShowNames ? printShowNames.checked : true,
+        showImages: printShowImages ? printShowImages.checked : true,
+        pitchStyle: printPitchStyle ? printPitchStyle.value : 'bw'
+      }
+    };
+  }
+
+  function saveStateNow(){
+    if (isRestoringState) return;
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getCurrentState()));
+    }catch(error){
+      console.warn('Unable to save formation:', error);
+    }
+  }
+
+  function scheduleSave(){
+    if (isRestoringState) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveStateNow, 150);
+  }
+
+  function clearPitchPlayers(){
+    pitch.querySelectorAll('.chip').forEach(chip => chip.remove());
+  }
+
+  function restoreSavedState(){
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    try{
+      const saved = JSON.parse(raw);
+      if (!saved || !Array.isArray(saved.roster) || !Array.isArray(saved.pitchPlayers)) return false;
+      isRestoringState = true;
+      clearPitchPlayers();
+      squadRoster.splice(0, squadRoster.length, ...saved.roster);
+      saved.pitchPlayers.forEach(savedPlayer => {
+        const player = squadRoster.find(item => item.id === savedPlayer.rosterId);
+        if (!player) return;
+        player.x = savedPlayer.x;
+        player.y = savedPlayer.y;
+        createChip(player.en, player.x, player.y, player.isGk, player.image, player.id, player.ar);
+      });
+      if (saved.printOptions){
+        if (printShowNames) printShowNames.checked = saved.printOptions.showNames !== false;
+        if (printShowImages) printShowImages.checked = saved.printOptions.showImages !== false;
+        if (printPitchStyle) printPitchStyle.value = saved.printOptions.pitchStyle || 'bw';
+      }
+      isRestoringState = false;
+      setSiteLanguage(saved.language === 'en' ? 'en' : 'ar', false);
+      renderSidebar();
+      return true;
+    }catch(error){
+      isRestoringState = false;
+      localStorage.removeItem(STORAGE_KEY);
+      console.warn('Unable to restore formation:', error);
+      return false;
+    }
+  }
+
+  function loadDefaultFormation(){
+    isRestoringState = true;
+    clearPitchPlayers();
+    Object.entries(defaultFormation).forEach(([playerName, position]) => {
+      const player = squadRoster.find(item => item.en === playerName);
+      if (!player) return;
+      player.x = position.x;
+      player.y = position.y;
+      createChip(player.en, player.x, player.y, player.isGk, player.image, player.id, player.ar);
+    });
+    isRestoringState = false;
+    setSiteLanguage('ar', false);
+    renderSidebar();
+  }
+
   function getRosterPlayer(rosterId){
     return squadRoster.find(player => player.id === rosterId);
   }
@@ -1282,7 +1379,7 @@
       action.disabled = isAdded;
       action.addEventListener('click', event => {
         event.stopPropagation();
-        if (!isAdded) addRosterPlayerToPitch(player);
+        if (!isAdded) { addRosterPlayerToPitch(player); scheduleSave(); }
       });
 
       const photoAction = document.createElement('button');
@@ -1352,6 +1449,7 @@
       if (deleteMode) {
         chip.remove();
         renderSidebar();
+        scheduleSave();
       }
     });
     chip.addEventListener('dblclick', () => {
@@ -1379,6 +1477,7 @@
           photo.src = makeFallbackAvatar(currentLabel.textContent);
         }
         renderSidebar();
+        scheduleSave();
       }
     });
     pitch.appendChild(chip);
@@ -1411,8 +1510,15 @@
     });
 
     const stop = () => {
+      if (!dragging) return;
       dragging = false;
       chip.classList.remove('dragging');
+      const rosterPlayer = getRosterPlayer(chip.dataset.rosterId);
+      if (rosterPlayer){
+        rosterPlayer.x = parseFloat(chip.style.left) || rosterPlayer.x;
+        rosterPlayer.y = parseFloat(chip.style.top) || rosterPlayer.y;
+      }
+      scheduleSave();
     };
     chip.addEventListener('pointerup', stop);
     chip.addEventListener('pointercancel', stop);
@@ -1497,6 +1603,7 @@
       }
       resetNewPlayerForm();
       renderSidebar();
+      scheduleSave();
       return;
     }
 
@@ -1514,6 +1621,7 @@
     addRosterPlayerToPitch(player);
     resetNewPlayerForm();
     renderSidebar();
+    scheduleSave();
   }
 
   addBtn.addEventListener('click', () => addPlayer(false));
@@ -1554,6 +1662,7 @@
           }
         }
         renderSidebar();
+        scheduleSave();
       }catch(error){
         // The validation message is already shown by readImageFile.
       }finally{
@@ -1572,7 +1681,7 @@
   });
 
   // ===== اللغة + الطباعة =====
-  function setSiteLanguage(lang){
+  function setSiteLanguage(lang, shouldSave = true){
     currentLanguage = lang;
     const text = uiText[lang];
 
@@ -1607,6 +1716,7 @@
     addBtn.textContent = text.addPlayer;
     addGkBtn.textContent = text.addGk;
     printBtn.textContent = text.print;
+    if (resetFormationBtn) resetFormationBtn.textContent = text.resetFormation;
     deleteBtn.textContent = deleteMode ? text.deleteOn : text.deleteOff;
 
     arabicSiteBtn.classList.toggle('on', lang === 'ar');
@@ -1628,6 +1738,7 @@
     });
 
     renderSidebar();
+    if (shouldSave) scheduleSave();
   }
 
   function printFormation(){
@@ -1657,15 +1768,23 @@
   englishSiteBtn.addEventListener('click', () => setSiteLanguage('en'));
   printBtn.addEventListener('click', printFormation);
 
-  // ===== تحميل التشكيلة الافتراضية عند فتح الموقع =====
-  Object.entries(defaultFormation).forEach(([playerName, position]) => {
-    const player = squadRoster.find(item => item.en === playerName);
-    if (!player) return;
-    player.x = position.x;
-    player.y = position.y;
-    createChip(player.en, player.x, player.y, player.isGk, player.image, player.id, player.ar);
+  [printShowNames, printShowImages, printPitchStyle].forEach(control => {
+    if (control) control.addEventListener('change', scheduleSave);
   });
-  setSiteLanguage('ar');
+
+  if (resetFormationBtn){
+    resetFormationBtn.addEventListener('click', () => {
+      if (!confirm(uiText[currentLanguage].resetConfirm)) return;
+      localStorage.removeItem(STORAGE_KEY);
+      location.reload();
+    });
+  }
+
+  // ===== تحميل آخر تشكيلة محفوظة أو التشكيلة الافتراضية =====
+  if (!restoreSavedState()){
+    loadDefaultFormation();
+    saveStateNow();
+  }
 })();
 </script>
 </body>
