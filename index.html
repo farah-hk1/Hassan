@@ -622,17 +622,20 @@
 
  /* ===== الطباعة ===== */
 @media print{
-  @page{size:A4 portrait;margin:7mm}
+  @page{size:A4 portrait;margin:5mm}
 
   html,
   body{
-    width:100%;
-    height:100%;
+    display:block !important;
+    width:100% !important;
+    height:auto !important;
+    min-height:0 !important;
+    overflow:visible !important;
     background:#fff !important;
     background-image:none !important;
     color:#111;
-    min-height:0;
-    padding:0;
+    margin:0 !important;
+    padding:0 !important;
     -webkit-print-color-adjust:exact;
     print-color-adjust:exact;
   }
@@ -653,12 +656,14 @@
     display:none !important;
   }
 
-  .main-layout{width:auto !important; display:block !important;}
+  .main-layout{display:block !important;width:100% !important;height:auto !important;margin:0 !important;padding:0 !important;}
 
   .pitch{
     --line:#111;
-    width:152mm;
-    max-width:100%;
+    width:145mm !important;
+    max-width:100% !important;
+    margin:0 auto !important;
+    break-inside:avoid-page !important;
     background:#fff !important;
     background-image:none !important;
     border:2px solid #111 !important;
@@ -992,7 +997,9 @@
     "SALEH": "صالح الشهري",
     "GEORGE": "جورج إلينيخينا",
     "ADNAN": "عدنان البشري",
-    "TALAL": "طلال حاجي"
+    "TALAL": "طلال حاجي",
+    "S.KELLER": "إس. كيلر",
+    "KONI": "كوني"
 };
 
 
@@ -1110,8 +1117,55 @@
     {n:'SALEH',x:50,y:76.2,img:'https://img.sofascore.com/api/v1/player/818779/image'},
     {n:'GEORGE',x:50,y:79.4,img:'https://img.sofascore.com/api/v1/player/1462434/image'},
     {n:'ADNAN',x:50,y:82.6,img:'https://img.sofascore.com/api/v1/player/1935786/image'},
-    {n:'TALAL',x:50,y:85.8,img:'https://img.sofascore.com/api/v1/player/1501473/image'}
+    {n:'TALAL',x:50,y:85.8,img:'https://img.sofascore.com/api/v1/player/1501473/image'},
+    {n:'S.KELLER',x:59,y:20.5},
+    {n:'KONI',x:30,y:43.5}
   ];
+
+  // ===== التشكيلة الافتراضية الظاهرة عند فتح الموقع =====
+  // بقية اللاعبين تبقى في القائمة الجانبية ويمكن إضافتها لاحقًا.
+  const defaultFormation = {
+    'RAIKOVIC': {x:50, y:5.5},
+    'M. ALABSI': {x:50, y:9.5},
+    'OSAMA ALMRMESH': {x:50, y:14.0},
+
+    'MOHANNED': {x:18, y:22.0},
+    'FAWAZ': {x:18, y:25.5},
+    'A. ALJULAYDAN (JIJI)': {x:18, y:29.0},
+    'DANILO': {x:41, y:20.5},
+    'CARLO SIMIC': {x:41, y:25.5},
+    'S.KELLER': {x:59, y:20.5},
+    'HASSAN KADESH': {x:61, y:24.0},
+    'M. BARNAWI': {x:61, y:30.0},
+    'MUATH': {x:82, y:22.0},
+
+    'RAKAN ALKABI': {x:31, y:39.5},
+    'KONI': {x:31, y:43.0},
+    'FALATA': {x:31, y:48.0},
+    'MATEO': {x:31, y:51.5},
+    'FARHA': {x:69, y:40.5},
+    'FAISAL': {x:69, y:45.5},
+    'A. HAWSAWI': {x:69, y:49.5},
+    'HUSAM AWAR': {x:50, y:50.0},
+    'AHMAD AL GHMDI': {x:50, y:55.0},
+
+    'MUSA DIABY': {x:18, y:58.0},
+    'ROGER': {x:18, y:62.0},
+    'ORTEGA': {x:50, y:60.5},
+    'ABOUD': {x:82, y:56.5},
+    'STEPHEN': {x:82, y:60.5},
+    'MARWAN': {x:82, y:64.5},
+
+    'YOUSSEF': {x:50, y:69.5},
+    'SALEH': {x:50, y:73.0},
+    'GEORGE': {x:50, y:76.5},
+
+    'TALAL': {x:91, y:73.5},
+    'HAMED': {x:91, y:78.0},
+    'DOUMIA': {x:91, y:82.0},
+    'SHTTAH': {x:91, y:86.0},
+    'SAAD ALMUSA': {x:91, y:90.0}
+  };
 
   const squadRoster = initialPlayers.map((player, index) => ({
     id: `player-${index + 1}`,
@@ -1603,8 +1657,14 @@
   englishSiteBtn.addEventListener('click', () => setSiteLanguage('en'));
   printBtn.addEventListener('click', printFormation);
 
-  // ===== تحميل اللاعبين =====
-  squadRoster.forEach(player => createChip(player.en, player.x, player.y, player.isGk, player.image, player.id, player.ar));
+  // ===== تحميل التشكيلة الافتراضية عند فتح الموقع =====
+  Object.entries(defaultFormation).forEach(([playerName, position]) => {
+    const player = squadRoster.find(item => item.en === playerName);
+    if (!player) return;
+    player.x = position.x;
+    player.y = position.y;
+    createChip(player.en, player.x, player.y, player.isGk, player.image, player.id, player.ar);
+  });
   setSiteLanguage('ar');
 })();
 </script>
